@@ -16,6 +16,7 @@ ENV NODE_ENV=production
 COPY --from=builder /home/node/app/package*.json ./
 COPY --from=builder /home/node/app/node_modules ./node_modules
 COPY --from=builder /home/node/app/dist ./dist
+COPY --from=builder /home/node/app/src/generated/prisma ./src/generated/prisma
 
 EXPOSE 3000
-CMD ["npm", "run", "start:prod"]
+CMD ["node", "dist/src/main.js"]
