@@ -3,6 +3,7 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import Stripe from 'stripe';
 import { envs } from 'src/config/envs';
@@ -64,7 +65,16 @@ export interface StripeSubscriptionUpgradeResponse {
 @Injectable()
 export class StripeService {
   private readonly logger = new Logger(StripeService.name);
-  private readonly stripeClient = new Stripe(envs.STRIPE_SECRET_KEY);
+  private readonly stripeClient = envs.STRIPE_SECRET_KEY
+    ? new Stripe(envs.STRIPE_SECRET_KEY)
+    : null;
+
+  private getStripeClient(): Stripe {
+    if (!this.stripeClient) {
+      throw new ServiceUnavailableException('Stripe no está configurado');
+    }
+    return this.stripeClient;
+  }
 
   public async createCheckoutSession(
     input: CreateStripeCheckoutSessionInput,
@@ -95,7 +105,7 @@ export class StripeService {
   ): Promise<void> {
     try {
       this.logger.log(`Canceling Stripe subscription id=${subscriptionId}`);
-      await this.stripeClient.subscriptions.cancel(subscriptionId);
+      await this.getStripeClient().subscriptions.cancel(subscriptionId);
       this.logger.log(`Stripe subscription canceled id=${subscriptionId}`);
     } catch (error: unknown) {
       this.logger.error('Stripe subscription cancellation failed', error);
@@ -112,10 +122,11 @@ export class StripeService {
       this.logger.log(
         `Creating Stripe billing portal session customer=${input.customerId}`,
       );
-      const session = await this.stripeClient.billingPortal.sessions.create({
-        customer: input.customerId,
-        return_url: input.returnUrl,
-      });
+      const session =
+        await this.getStripeClient().billingPortal.sessions.create({
+          customer: input.customerId,
+          return_url: input.returnUrl,
+        });
       if (!session.url) {
         throw new InternalServerErrorException(
           'Stripe devolvió una sesión de portal inválida',
@@ -137,7 +148,7 @@ export class StripeService {
   ): Promise<readonly StripeInvoiceSummary[]> {
     try {
       this.logger.log(`Listing Stripe invoices customer=${customerId}`);
-      const invoices = await this.stripeClient.invoices.list({
+      const invoices = await this.getStripeClient().invoices.list({
         customer: customerId,
         limit: 50,
       });
@@ -164,8 +175,13 @@ export class StripeService {
     readonly rawBody: Buffer;
     readonly signature: string;
   }): Stripe.Event {
+    if (!envs.STRIPE_WEBHOOK_SECRET) {
+      throw new ServiceUnavailableException(
+        'Stripe webhook no está configurado',
+      );
+    }
     try {
-      const event = this.stripeClient.webhooks.constructEvent(
+      const event = this.getStripeClient().webhooks.constructEvent(
         input.rawBody,
         input.signature,
         envs.STRIPE_WEBHOOK_SECRET,
@@ -181,7 +197,7 @@ export class StripeService {
   public async listRecurringPrices(): Promise<readonly StripePrice[]> {
     try {
       this.logger.log('Listing Stripe recurring prices');
-      const prices = await this.stripeClient.prices.list({
+      const prices = await this.getStripeClient().prices.list({
         active: true,
         expand: ['data.product'],
         limit: 100,
@@ -228,7 +244,7 @@ export class StripeService {
     try {
       this.logger.log(`Retrieving Stripe subscription id=${subscriptionId}`);
       const subscription =
-        await this.stripeClient.subscriptions.retrieve(subscriptionId);
+        await this.getStripeClient().subscriptions.retrieve(subscriptionId);
       this.logger.log(`Stripe subscription retrieved id=${subscriptionId}`);
       return subscription;
     } catch (error: unknown) {
@@ -263,9 +279,8 @@ export class StripeService {
       targetPrice,
     });
     try {
-      const updatedSubscription = await this.stripeClient.subscriptions.update(
-        subscription.id,
-        {
+      const updatedSubscription =
+        await this.getStripeClient().subscriptions.update(subscription.id, {
           payment_behavior: 'pending_if_incomplete',
           proration_behavior: 'always_invoice',
           items: [
@@ -274,8 +289,7 @@ export class StripeService {
               price: input.newPriceId,
             },
           ],
-        },
-      );
+        });
       return {
         subscriptionId: updatedSubscription.id,
         invoiceId: this.resolveLatestInvoiceId(
@@ -295,7 +309,7 @@ export class StripeService {
 
   private async retrieveRecurringPrice(priceId: string): Promise<Stripe.Price> {
     try {
-      const price = await this.stripeClient.prices.retrieve(priceId);
+      const price = await this.getStripeClient().prices.retrieve(priceId);
       if (!price.recurring) {
         throw new BadRequestException('El nuevo precio no es recurrente');
       }
@@ -339,7 +353,7 @@ export class StripeService {
     input: CreateStripeCheckoutSessionInput,
   ): Promise<Stripe.Checkout.Session> {
     try {
-      return await this.stripeClient.checkout.sessions.create({
+      return await this.getStripeClient().checkout.sessions.create({
         mode: 'subscription',
         success_url: envs.STRIPE_SUCCESS_URL || 'http://localhost:3000',
         cancel_url: envs.STRIPE_CANCEL_URL || 'http://localhost:3000',

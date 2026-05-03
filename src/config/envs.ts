@@ -22,10 +22,22 @@ const envSchema = z
     RESEND_API_KEY: z.string(),
     RESEND_FROM_EMAIL: z.string(),
     EMAIL_SUPPORT: z.string(),
-    STRIPE_SECRET_KEY: z.string().min(1),
-    STRIPE_WEBHOOK_SECRET: z.string().min(1),
-    STRIPE_SUCCESS_URL: z.string().url(),
-    STRIPE_CANCEL_URL: z.string().url(),
+    STRIPE_SECRET_KEY: z.preprocess(
+      normalizeOptionalString,
+      z.string().min(1).optional(),
+    ),
+    STRIPE_WEBHOOK_SECRET: z.preprocess(
+      normalizeOptionalString,
+      z.string().min(1).optional(),
+    ),
+    STRIPE_SUCCESS_URL: z.preprocess(
+      normalizeOptionalString,
+      z.string().url().optional(),
+    ),
+    STRIPE_CANCEL_URL: z.preprocess(
+      normalizeOptionalString,
+      z.string().url().optional(),
+    ),
     R2_ACCOUNT_ID: z.string(),
     R2_ACCESS_KEY_ID: z.string(),
     R2_SECRET_ACCESS_KEY: z.string(),
@@ -60,18 +72,17 @@ const envSchema = z
   .passthrough();
 
 type EnvironmentVariables = z.output<typeof envSchema>;
-console.log(process.env);
 const parseResult = envSchema.safeParse({ ...process.env });
-console.log(parseResult.success);
 if (!parseResult.success) {
   const issues = parseResult.error.issues
     .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
     .join('; ');
-  console.log(issues);
   throw new Error(`Environment validation error: ${issues}`);
 }
 
 const environmentVariables: EnvironmentVariables = parseResult.data;
+const stripeSecretKey = environmentVariables.STRIPE_SECRET_KEY;
+const stripeWebhookSecret = environmentVariables.STRIPE_WEBHOOK_SECRET;
 const privateBucket =
   environmentVariables.R2_PRIVATE_BUCKET ?? environmentVariables.R2_BUCKET;
 const publicBucket =
@@ -90,10 +101,11 @@ export const envs = {
   JWT_EXPIRES_IN: environmentVariables.JWT_EXPIRES_IN,
   RESEND_API_KEY: environmentVariables.RESEND_API_KEY,
   RESEND_FROM_EMAIL: environmentVariables.RESEND_FROM_EMAIL,
-  STRIPE_SECRET_KEY: environmentVariables.STRIPE_SECRET_KEY,
-  STRIPE_WEBHOOK_SECRET: environmentVariables.STRIPE_WEBHOOK_SECRET,
+  STRIPE_SECRET_KEY: stripeSecretKey,
+  STRIPE_WEBHOOK_SECRET: stripeWebhookSecret,
   STRIPE_SUCCESS_URL: environmentVariables.STRIPE_SUCCESS_URL,
   STRIPE_CANCEL_URL: environmentVariables.STRIPE_CANCEL_URL,
+  STRIPE_ENABLED: Boolean(stripeSecretKey),
   R2_ACCOUNT_ID: environmentVariables.R2_ACCOUNT_ID,
   R2_ACCESS_KEY_ID: environmentVariables.R2_ACCESS_KEY_ID,
   R2_SECRET_ACCESS_KEY: environmentVariables.R2_SECRET_ACCESS_KEY,
