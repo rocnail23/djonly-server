@@ -1,0 +1,236 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  PAYPAL
+  MERCADOPAGO
+  STRIPE
+  MANUAL // Para cuando Alejandro activa a alguien a mano
+}
+
+// EXPIRED = terminó su período normal (venció y/o fue reemplazada por la nueva).
+// CANCELED = Stripe la canceló explícitamente (customer.subscription.deleted).
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+  EXPIRED
+  PAST_DUE
+}
+
+enum SubscriptionPlan {
+  BASIC
+  PREMIUM
+  ENTERPRISE
+}
+
+enum SubscriptionSource {
+  STRIPE
+  MANUAL
+}
+
+enum StripeWebhookEventStatus {
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+enum UpgradeRequestStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  EXPIRED
+}
+
+enum AuthTokenType {
+  EMAIL_CONFIRMATION
+  PASSWORD_RESET
+}
+
+model User {
+  id               String            @id @default(uuid())
+  email            String            @unique
+  emailVerified    Boolean           @default(false)
+  password         String
+  name             String?
+  role             Role              @default(USER)
+  stripeCustomerId String?           @unique
+  
+  // Lógica de Suscripción
+  subscriptionActive Boolean         @default(false)
+  subscriptionEnd    DateTime?       // Fecha en que vence el acceso
+  
+  // Relaciones
+  downloads        DownloadHistory[]
+  payments         Payment[]
+  subscriptions    Subscription[]
+  upgradeRequests  UpgradeRequest[]
+  authTokens       AuthToken[]
+  
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Genre {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  videos    Video[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuthToken {
+  id         String        @id @default(uuid())
+  token      String        @unique
+  type       AuthTokenType
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime      @default(now())
+
+  user       User          @relation(fields: [userId], references: [id])
+  userId     String
+
+  @@index([userId, type])
+  @@index([token, type])
+}
+
+model Video {
+  id               String            @id @default(uuid())
+  title            String
+  artist           String?
+  bpm              Int?              // Revoluciones por minuto
+  genre            Genre             @relation(fields: [genreId], references: [id])
+  genreId          String
+  
+  // Archivos en Cloudflare R2 (Guardamos los Keys/Paths)
+  fullVideoKey     String            // Video original protegido
+  previewKey       String?           // Clip de 20 segundos público
+  thumbnailKey     String?           // Imagen de portada
+  
+  // Estado de procesamiento (FFmpeg)
+  isProcessing     Boolean           @default(true) 
+  processingError  String?
+  processedAt      DateTime?
+  
+  // Relaciones
+  downloadHistory  DownloadHistory[]
+  
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model DownloadHistory {
+  id               String            @id @default(uuid())
+  
+  // Relaciones
+  user             User              @relation(fields: [userId], references: [id])
+  userId           String
+  
+  video            Video             @relation(fields: [videoId], references: [id])
+  videoId          String
+  
+  downloadedAt     DateTime          @default(now())
+  ipAddress        String?           // Para seguridad y tracking
+  
+  // Nota: La lógica de "2 descargas" se calculará contando estos registros
+  // dentro del periodo activo de suscripción del usuario.
+}
+
+model Payment {
+  id               String            @id @default(uuid())
+  amount           Float
+  currency         String            @default("MXN")
+  status           PaymentStatus     @default(PENDING)
+  provider         PaymentProvider
+  externalId       String?           @unique // ID de transacción de PayPal/MercadoPago
+  
+  // Relación con usuario
+  user             User              @relation(fields: [userId], references: [id])
+  userId           String
+
+  subscription     Subscription?     @relation(fields: [subscriptionId], references: [id])
+  subscriptionId   String?
+  
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  plan               SubscriptionPlan
+  source             SubscriptionSource @default(STRIPE)
+  status             SubscriptionStatus @default(ACTIVE)
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  canceledAt         DateTime?
+  externalId         String?            @unique
+
+  user               User               @relation(fields: [userId], references: [id])
+  userId             String
+  payments           Payment[]
+  upgradeRequests    UpgradeRequest[]
+
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([userId, status])
+}
+
+model UpgradeRequest {
+  id                   String             @id @default(uuid())
+  user                 User               @relation(fields: [userId], references: [id])
+  userId               String
+  subscription         Subscription       @relation(fields: [subscriptionId], references: [id])
+  subscriptionId       String
+  stripeSubscriptionId String
+  stripeInvoiceId      String?            @unique
+  fromPriceId          String
+  toPriceId            String
+  status               UpgradeRequestStatus @default(PENDING)
+  failureReason        String?
+  resolvedAt           DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([userId, status])
+  @@index([stripeSubscriptionId])
+}
+
+model StripeWebhookEvent {
+  id             String                   @id @default(uuid())
+  eventId        String                   @unique
+  type           String
+  stripeCreatedAt DateTime?
+  status         StripeWebhookEventStatus @default(PROCESSING)
+  processedAt    DateTime?
+  errorMessage   String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  @@index([status, createdAt])
+}
