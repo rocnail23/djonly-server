@@ -9,7 +9,8 @@ RUN npm ci
 
 FROM deps AS builder
 COPY . .
-RUN npm run build && npm prune --omit=dev
+ENV DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres
+RUN npx prisma generate && npm run build && npm prune --omit=dev
 
 FROM base AS runner
 ENV NODE_ENV=production
