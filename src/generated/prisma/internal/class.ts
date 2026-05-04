@@ -23,7 +23,7 @@ const config: runtime.GetPrismaClientConfig = {
       "value": "prisma-client"
     },
     "output": {
-      "value": "/home/node/app/src/generated/prisma",
+      "value": "/home/jose/Desktop/djonly/server/src/generated/prisma",
       "fromEnvVar": null
     },
     "config": {
@@ -33,12 +33,12 @@ const config: runtime.GetPrismaClientConfig = {
     "binaryTargets": [
       {
         "fromEnvVar": null,
-        "value": "linux-musl-openssl-3.0.x",
+        "value": "debian-openssl-3.0.x",
         "native": true
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "/home/node/app/prisma/schema.prisma",
+    "sourceFilePath": "/home/jose/Desktop/djonly/server/prisma/schema.prisma",
     "isCustomOutput": true
   },
   "relativePath": "../../../prisma",
