@@ -239,10 +239,13 @@ export class AuthController {
 
   private getAccessTokenCookieOptions(): CookieOptions {
     const isProductionEnvironment = process.env.NODE_ENV === 'production';
+    const sameSitePolicy: CookieOptions['sameSite'] = isProductionEnvironment
+      ? 'none'
+      : 'lax';
     return {
       httpOnly: true,
       secure: isProductionEnvironment,
-      sameSite: 'lax',
+      sameSite: sameSitePolicy,
       maxAge: ACCESS_TOKEN_COOKIE_MAX_AGE_MS,
       path: '/',
     };
