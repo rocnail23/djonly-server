@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { type CookieOptions, type Response } from 'express';
+import { envs } from 'src/config/envs';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { AuthService } from './auth.service';
 import { Public } from './custom.decorator/public.decorator';
@@ -242,12 +243,14 @@ export class AuthController {
     const sameSitePolicy: CookieOptions['sameSite'] = isProductionEnvironment
       ? 'none'
       : 'lax';
+    const cookieDomain = envs.COOKIE_DOMAIN;
     return {
       httpOnly: true,
       secure: isProductionEnvironment,
       sameSite: sameSitePolicy,
       maxAge: ACCESS_TOKEN_COOKIE_MAX_AGE_MS,
       path: '/',
+      ...(cookieDomain ? { domain: cookieDomain } : {}),
     };
   }
 }

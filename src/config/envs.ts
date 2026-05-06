@@ -17,6 +17,10 @@ const envSchema = z
     PORT: z.coerce.number().int().min(1).max(65535).default(3002),
     DATABASE_URL: z.string().min(1),
     FRONTEND_URL: z.string().url().optional(),
+    COOKIE_DOMAIN: z.preprocess(
+      normalizeOptionalString,
+      z.string().min(1).optional(),
+    ),
     JWT_SECRET: z.string().min(32),
     JWT_EXPIRES_IN: z.string().min(1).default('15m'),
     RESEND_API_KEY: z.string(),
@@ -97,6 +101,7 @@ export const envs = {
   PORT: environmentVariables.PORT,
   DATABASE_URL: environmentVariables.DATABASE_URL,
   FRONTEND_URL: environmentVariables.FRONTEND_URL,
+  COOKIE_DOMAIN: environmentVariables.COOKIE_DOMAIN,
   JWT_SECRET: environmentVariables.JWT_SECRET,
   JWT_EXPIRES_IN: environmentVariables.JWT_EXPIRES_IN,
   RESEND_API_KEY: environmentVariables.RESEND_API_KEY,
