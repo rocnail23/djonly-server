@@ -391,6 +391,52 @@ export class VideosService {
     }
   }
 
+  public async reprocessAllVideos(): Promise<{ readonly queued: number }> {
+    const videos = await this.executeDatabaseOperation(
+      () =>
+        this.prismaService.video.findMany({
+          where: { fullVideoKey: { not: '' } },
+          select: { id: true, fullVideoKey: true },
+        }),
+      'No se pudieron obtener los videos para reprocesar',
+    );
+
+    let queued = 0;
+    for (const video of videos) {
+      await this.executeDatabaseOperation(
+        () =>
+          this.prismaService.video.update({
+            where: { id: video.id },
+            data: {
+              isProcessing: true,
+              previewKey: null,
+              thumbnailKey: null,
+              processingError: null,
+              processedAt: null,
+            },
+          }),
+        'No se pudo resetear el estado del video',
+      );
+      try {
+        await this.videoProcessingService.enqueueVideoProcessing({
+          videoId: video.id,
+          fullVideoKey: video.fullVideoKey,
+        });
+        queued++;
+      } catch (error: unknown) {
+        this.logger.error(
+          `No se pudo encolar el video id=${video.id} para reprocesamiento`,
+          error,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Reprocess all: queued=${queued} of total=${videos.length}`,
+    );
+    return { queued };
+  }
+
   public async deleteVideo(videoId: string): Promise<void> {
     const existingVideo = await this.findVideoById(videoId);
     await this.deleteVideoAssets(existingVideo);

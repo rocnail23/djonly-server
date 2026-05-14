@@ -16,7 +16,7 @@ import { envs } from 'src/config/envs';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { type VideoProcessingJobPayload } from './video-processing.types';
 
-const PREVIEW_DURATION_SECONDS = 20;
+const PREVIEW_DURATION_SECONDS = 40;
 const THUMBNAIL_CAPTURE_SECOND = 1;
 const MAX_PROCESSING_ERROR_LENGTH = 1200;
 

@@ -71,6 +71,12 @@ export class VideosController {
   }
 
   @Roles(UserRole.ADMIN)
+  @Post('reprocess-all')
+  public async reprocessAllVideos(): Promise<{ readonly queued: number }> {
+    return this.videosService.reprocessAllVideos();
+  }
+
+  @Roles(UserRole.ADMIN)
   @Post()
   public async createVideo(
     @Body() createVideoDto: CreateVideoDto,
