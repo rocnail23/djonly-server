@@ -203,29 +203,35 @@ export class StripeService {
         limit: 100,
         type: 'recurring',
       });
-      const mappedPrices = prices.data.map((price) => {
-        const unitAmount = price.unit_amount ? price.unit_amount / 100 : 0;
-        const currency = price.currency ?? 'usd';
-        const interval = price.recurring?.interval ?? null;
-        const intervalCount = price.recurring?.interval_count
-          ? price.recurring.interval_count
-          : interval
-            ? 1
-            : null;
-        const productName = this.resolveProductName(price.product);
-        const productDescription = this.resolveProductDescription(
-          price.product,
-        );
-        return {
-          id: price.id,
-          amount: unitAmount,
-          currency,
-          interval,
-          intervalCount,
-          productName,
-          productDescription,
-        };
-      });
+      const mappedPrices = prices.data
+        .filter((price) => {
+          if (!price.product || typeof price.product === 'string') return false;
+          if ('deleted' in price.product && price.product.deleted) return false;
+          return price.product.active === true;
+        })
+        .map((price) => {
+          const unitAmount = price.unit_amount ? price.unit_amount / 100 : 0;
+          const currency = price.currency ?? 'usd';
+          const interval = price.recurring?.interval ?? null;
+          const intervalCount = price.recurring?.interval_count
+            ? price.recurring.interval_count
+            : interval
+              ? 1
+              : null;
+          const productName = this.resolveProductName(price.product);
+          const productDescription = this.resolveProductDescription(
+            price.product,
+          );
+          return {
+            id: price.id,
+            amount: unitAmount,
+            currency,
+            interval,
+            intervalCount,
+            productName,
+            productDescription,
+          };
+        });
       this.logger.log(
         `Stripe recurring prices loaded count=${mappedPrices.length}`,
       );
