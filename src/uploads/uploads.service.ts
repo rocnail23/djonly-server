@@ -97,7 +97,7 @@ export class UploadsService {
       Bucket: this.getPrivateBucketName(),
       Key: key,
       ContentType: input.contentType,
-      Metadata: input.metadata,
+      Metadata: this.encodeMetadataValues(input.metadata),
     });
     const response = await this.getS3Client().send(command);
     if (!response.UploadId || !response.Key) {
@@ -334,6 +334,15 @@ export class UploadsService {
         'El partNumber debe ser un entero entre 1 y 10000',
       );
     }
+  }
+
+  private encodeMetadataValues(
+    metadata?: Record<string, string>,
+  ): Record<string, string> | undefined {
+    if (!metadata) return undefined;
+    return Object.fromEntries(
+      Object.entries(metadata).map(([k, v]) => [k, encodeURIComponent(v)]),
+    );
   }
 
   private generateObjectKey(input: UploadRequestInput): string {

@@ -71,6 +71,12 @@ export class VideosController {
   }
 
   @Roles(UserRole.ADMIN)
+  @Post('reprocess-failed')
+  public async reprocessFailedVideos(): Promise<{ readonly queued: number }> {
+    return this.videosService.reprocessFailedVideos();
+  }
+
+  @Roles(UserRole.ADMIN)
   @Post('reprocess-all')
   public async reprocessAllVideos(): Promise<{ readonly queued: number }> {
     return this.videosService.reprocessAllVideos();

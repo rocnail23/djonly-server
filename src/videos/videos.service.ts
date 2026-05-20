@@ -391,6 +391,54 @@ export class VideosService {
     }
   }
 
+  public async reprocessFailedVideos(): Promise<{ readonly queued: number }> {
+    const videos = await this.executeDatabaseOperation(
+      () =>
+        this.prismaService.video.findMany({
+          where: {
+            fullVideoKey: { not: '' },
+            previewKey: null,
+            isProcessing: false,
+          },
+          select: { id: true, fullVideoKey: true },
+        }),
+      'No se pudieron obtener los videos fallidos para reprocesar',
+    );
+
+    let queued = 0;
+    for (const video of videos) {
+      await this.executeDatabaseOperation(
+        () =>
+          this.prismaService.video.update({
+            where: { id: video.id },
+            data: {
+              isProcessing: true,
+              processingError: null,
+              processedAt: null,
+            },
+          }),
+        'No se pudo resetear el estado del video fallido',
+      );
+      try {
+        await this.videoProcessingService.enqueueVideoProcessing({
+          videoId: video.id,
+          fullVideoKey: video.fullVideoKey,
+        });
+        queued++;
+      } catch (error: unknown) {
+        this.logger.error(
+          `No se pudo encolar el video id=${video.id} para reprocesamiento`,
+          error,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Reprocess failed: queued=${queued} of total=${videos.length}`,
+    );
+    return { queued };
+  }
+
   public async reprocessAllVideos(): Promise<{ readonly queued: number }> {
     const videos = await this.executeDatabaseOperation(
       () =>
